@@ -19,7 +19,7 @@ int main(){
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = INADDR_ANY;
-    sin.sin_port = htons(10000 + /*자기서브넷숫자*/ 326);
+    sin.sin_port = htons(10326); // client 의 포트 -> 10000 + 자기서브넷 숫자
     if(bind(s,(struct sockaddr * ) &sin, sizeof(sin)) < 0){
         cerr << strerror(errno) << endl;
         return 0;
@@ -27,7 +27,7 @@ int main(){
 
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
-    sin.sin_port = htons(20326);
+    sin.sin_port = htons(20326); // 보낼 server 의 포트 -> 20000 + 자기서브넷 숫자
     sin.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     string buf;

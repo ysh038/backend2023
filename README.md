@@ -32,6 +32,8 @@ eval $(ssh-agent)랑 똑같은듯
 
 ## private key 접근 권한 문제 생길 때
 
+### 윈도우에서 chmod 안될때!
+
 ssh-add로 private key추가하려 할 때, warning과 함께 권한 문제라는 오류가 뜰 수 있다.
 
 윈도우 콘솔환경에서는 또 chmod가 안된다.
@@ -39,6 +41,12 @@ ssh-add로 private key추가하려 할 때, warning과 함께 권한 문제라�
 `icacls C:\경로\키파일 /inheritance:r /grant:r "사용자 이름:R"`를 하면 권한 변경된다.
 
 이 때, icacls 명령어를 실행할 때, icacls를 또 환경변수에 추가하거나 System32 디렉토리 내에서 실행하면 된다.
+
+### MAC의 경우에
+
+최근에 노트북을 MAC으로 바꿨는데, MAC의 경우에 리눅스 명령어 등 터미널에서 개발 명령어들이 잘 실행된다.
+
+`chmod 400 {private_key 경로}`
 
 ## Python main함수 실행에 관해
 파이썬으로 main함수가 존재하는 코드를 처음 짜봐서 생긴 이슈

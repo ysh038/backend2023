@@ -29,16 +29,16 @@ def create_chat_room(sock,title):
     
     print("chatRooms: ",chat_rooms)
     
-    socket_to_delete = sock
-    socket_index = 0
-
-    for i in chat_rooms:
-        if sock in i:
-            socket_index = chat_rooms.index(i)
-            del i[socket_to_delete]
-            del chat_rooms[socket_index]
+    # chat_rooms에서 특정 sock 찾기 (이후 채팅방 나가기, 삭제 위해 미리 구현)
+    # socket_to_delete = sock
+    # socket_index = 0
+    # for find_room in chat_rooms:
+    #     if sock in find_room:
+    #         socket_index = chat_rooms.index(find_room)
+    #         del find_room[socket_to_delete]
+    #         del chat_rooms[socket_index]
     
-    print(chat_rooms)
+    # print(chat_rooms)
 
     # if FLAGS.format == 'json':
     msg = {

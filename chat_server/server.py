@@ -20,6 +20,9 @@ client_sockets = []
 # 채팅방을 저장할 리스트
 chat_rooms = []
 
+# 유저 소켓정보와 이름을 저장할 딕셔너리 리스트
+users = []
+
 # 채팅방이름과 소켓을 Key
 
 def create_chat_room(sock,title):
@@ -38,8 +41,6 @@ def create_chat_room(sock,title):
     #         del find_room[socket_to_delete]
     #         del chat_rooms[socket_index]
     
-    # print(chat_rooms)
-
     # if FLAGS.format == 'json':
     msg = {
         'type' : 'SCSystemMessage',
@@ -47,6 +48,37 @@ def create_chat_room(sock,title):
     }
     send_to_client(sock,msg)
 
+def change_user_name(sock, new_name):
+    # print("인자 소켓: ",sock.getsockname())
+    for user in users:
+        if sock in user:
+            user[sock] = new_name
+
+    # if FLAGS.format == 'json':
+    msg = {
+        'type' : 'SCSystemMessage',
+        'text' : '유저 이름이 ' + new_name + ' 으로 변경되었습니다.'
+    }
+    send_to_client(sock,msg)
+
+def send_to_others(sock, json_data):
+    for user in users:
+        if sock in user:
+            send_user_name = user[sock]
+
+    msg = {
+        'type' : 'SCChat',
+        'member' : send_user_name,
+        'text' : json_data['text']
+    }
+
+    for user in users:
+        if sock in user:
+            print("",end="")
+        else:
+            for key in user.keys():
+                send_to_client(key,msg)
+            # send_to_client(sockets[0],msg)
 
 def shutdown_server(server_socket):
     # 모든 클라이언트의 연결을 끊음
@@ -104,6 +136,8 @@ def main():
 
     # 서버 소켓 설정
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # SO_REUSEADDR 소켓 옵션을 설정
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PORT))
     server_socket.listen(5)  # 최대 5개의 연결을 대기합니다.
 
@@ -122,6 +156,7 @@ def main():
                 client_socket, client_address = server_socket.accept()
                 client_sockets.append(client_socket)
                 print(f"새 클라이언트 연결: {client_address}")
+                users.append({client_socket:client_address})
             else:
                 # 클라이언트로부터 데이터를 받습니다.
                 data = sock.recv(65535)
@@ -145,6 +180,13 @@ def main():
                         create_chat_room(sock,new_room_title)
                     elif message_type == "CSShutdown":
                         shutdown_server(server_socket)
+                    elif message_type == "CSName":
+                        new_user_name = json_data["name"]
+                        change_user_name(sock,new_user_name)
+                    elif message_type == "CSChat":
+                        send_to_others(sock,json_data)
+                        
+
 
 message_type_handlers = {
     'CSCreateRoom': create_chat_room

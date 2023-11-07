@@ -23,15 +23,31 @@ chat_rooms = []
 # 유저 소켓정보와 이름을 저장할 딕셔너리 리스트
 users = []
 
-# 채팅방이름과 소켓을 Key
+# roomId 배정 정수형 변수
+room_count = 1
 
+# 채팅방이름과 소켓을 Key
 def create_chat_room(sock,title):
-    chat_room = {sock : title}
-    chat_rooms.append(chat_room)
-    print("Create Chat Room, title is ",title)
-    
+    global room_count
+    chat_room_group = []
+    chat_room = []
+    # chat_room 의 인덱스0 = 소켓, 인덱스1 = title
+    chat_room.append(sock)
+    chat_room.append(title)
+    chat_room_group.append(chat_room)
+    chat_rooms.append({room_count:chat_room_group})
+    print(f"Create Chat Room, roomId is {room_count}")
     print("chatRooms: ",chat_rooms)
-    
+
+    room_count += 1
+
+    # if FLAGS.format == 'json':
+    msg = {
+        'type' : 'SCSystemMessage',
+        'text' : '[' + title + '] 방에 입장했습니다.'
+    }
+    send_to_client(sock,msg)
+
     # chat_rooms에서 특정 sock 찾기 (이후 채팅방 나가기, 삭제 위해 미리 구현)
     # socket_to_delete = sock
     # socket_index = 0
@@ -40,13 +56,29 @@ def create_chat_room(sock,title):
     #         socket_index = chat_rooms.index(find_room)
     #         del find_room[socket_to_delete]
     #         del chat_rooms[socket_index]
-    
-    # if FLAGS.format == 'json':
-    msg = {
-        'type' : 'SCSystemMessage',
-        'text' : '['+title+'] 방에 입장했습니다.'
-    }
-    send_to_client(sock,msg)
+
+def join_chat_room(sock, roomId):
+    index = 1
+    for find_room in chat_rooms:
+        for i in find_room[index]:
+            if sock in i:
+                print(True,i[1])
+                msg = {
+                    'type' : 'SCSystemMessage',
+                    'text' : '이미 채팅방에 들어가있습니다.'
+                }
+                send_to_client(sock,msg)
+                return 0
+        index+=1
+    global room_count
+    chat_room = []
+    for room in chat_rooms:
+        if roomId in room:
+            chat_room.append(sock)
+            # title
+            chat_room.append(room[roomId][0][1])
+            room[roomId].append(chat_room)
+
 
 def change_user_name(sock, new_name):
     # print("인자 소켓: ",sock.getsockname())
@@ -65,6 +97,7 @@ def send_to_others(sock, json_data):
     for user in users:
         if sock in user:
             send_user_name = user[sock]
+            print("send_user_name : " , send_user_name)
 
     msg = {
         'type' : 'SCChat',
@@ -117,11 +150,11 @@ def send_to_client(sock, msg):
             raise RuntimeError('Send failed')
         offset += num_sent
         attempt += 1
-        print(f'  - send() 시도 #{attempt}: {num_sent}바이트 전송 완료')
+        # print(f'  - send() 시도 #{attempt}: {num_sent}바이트 전송 완료')
 # 메세지 제작부분
 
 def main():
-
+    # FLAG는 아직 사용하지 않음
     # if not FLAGS.ip:
     #     print('서버의 IP 주소를 지정해야 됩니다.')
     #     # 관례적으로 오류인 경우 0 이 아닌 종료 값을 쓴다.
@@ -132,7 +165,6 @@ def main():
     #     print('서버의 Port 번호를 지정해야 됩니다.')
     #     # 에러 케이스에 따라 서로 다른 에러코드를 사용할 수도 있다.
     #     sys.exit(2)
-
 
     # 서버 소켓 설정
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -166,14 +198,14 @@ def main():
                     client_sockets.remove(sock)
                     sock.close()
                 else:
-                    print(f"클라이언트로부터 받은 메시지: {data}")
+                    # print(f"클라이언트로부터 받은 메시지: {data}")
 
                     # 클라이언트로부터 받은 데이터를 처리합니다.
                     start_index = data.index(b'{')
                     # { 앞은 다 자르고 받음
                     json_data = json.loads(data[start_index:])
                     message_type = json_data["type"]
-                    print(f'받은 데이터 type: {json_data["type"]}')
+                    # print(f'받은 데이터 type: {json_data["type"]}')
 
                     if message_type == "CSCreateRoom":
                         new_room_title = json_data["title"]
@@ -185,7 +217,9 @@ def main():
                         change_user_name(sock,new_user_name)
                     elif message_type == "CSChat":
                         send_to_others(sock,json_data)
-                        
+                    elif message_type == "CSJoinRoom":
+                        roomId = json_data["roomId"]
+                        join_chat_room(sock,roomId)
 
 
 message_type_handlers = {

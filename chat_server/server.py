@@ -156,33 +156,37 @@ def leave_chat_room(sock):
             for i in find_room[key_list[index]]:
                 if sock in i:
                     # sock 소켓의 인덱스 할당
-                    if sock in find_room[key_list[index]][0]:
-                        print("find_room[key_list[index]][0]: ",find_room[key_list[index]][0])
-                        socket_index = find_room[key_list[index]][0].index(sock)
-                        title = find_room[key_list[index]][0][1]
-                        # 채팅방에서 sock 삭제
-                        del find_room[key_list[index]][socket_index] 
-                        msg = {
-                            'type' : 'SCSystemMessage',
-                            'text' : '채팅방 나가기'
-                        }
-                        send_to_client(sock,msg)
-                        # 채팅방이 비었다면 채팅방 폭파
-                        if len(find_room[key_list[index]]) == 0:
-                            print(f'{title}채팅방은 User가 없어 폭파')
-                            # 채팅방 딕셔너리삭제
-                            del find_room[key_list[index]]
-                            # 채팅방 빈 딕셔너리 삭제
-                            del chat_rooms[chat_rooms.index(find_room)]
+                    print("find_room[key_list[index]]: ",find_room[key_list[index]])
+                    for j in range(len(find_room[key_list[index]])):
+                        # 지금 이상한게 leave됨
+                        print("비교대상:",find_room[key_list[index]][j])
+                        print("나갈 소켓: ",sock)
+                        if sock in find_room[key_list[index]][j]:
+                            socket_index = find_room[key_list[index]][j].index(sock)
+                            title = find_room[key_list[index]][j][1]
+                            # 채팅방에서 sock 삭제
+                            del find_room[key_list[index]][j] 
                             msg = {
                                 'type' : 'SCSystemMessage',
-                                'text' : title+'채팅방 폭파!'
+                                'text' : '채팅방 나가기'
                             }
                             send_to_client(sock,msg)
-                    
-                        return 0
-                    else: 
-                        print("오류")
+                            # 채팅방이 비었다면 채팅방 폭파
+                            if len(find_room[key_list[index]]) == 0:
+                                print(f'{title}채팅방은 User가 없어 폭파')
+                                # 채팅방 딕셔너리삭제
+                                del find_room[key_list[index]]
+                                # 채팅방 빈 딕셔너리 삭제
+                                del chat_rooms[chat_rooms.index(find_room)]
+                                msg = {
+                                    'type' : 'SCSystemMessage',
+                                    'text' : title+'채팅방 폭파!'
+                                }
+                                send_to_client(sock,msg)
+                        
+                            return 0
+                        else: 
+                            print("오류")
         index+=1
     msg = {
         'type' : 'SCSystemMessage',
@@ -205,12 +209,19 @@ def shutdown_server(server_socket):
     exit()
 
 def is_already_join(sock):
-    index = 1
+    key_list = []
+    # 현재 존재하는 채팅방의 딕셔너리 key 값 list
+    for room in chat_rooms:
+        key = list(room.keys())
+        key_list.append(key[0])
+    index = 0
     # 현재 클라이언트 소켓이 chat_rooms에 있나 검사
     for find_room in chat_rooms:
-        if index in find_room: # 이거도 아마 문제 있을듯
-            for i in find_room[index]:
+        if key_list[index] in find_room: # 이거도 아마 문제 있을듯
+            for i in find_room[key_list[index]]:
                 if sock in i:
+                    print("sock",sock)
+                    print("I",i)
                     print('User already has chatRoom')
                     msg = {
                         'type' : 'SCSystemMessage',
@@ -221,8 +232,38 @@ def is_already_join(sock):
         index+=1
     return False
 
-def show_rooms():
-    print("rooms",chat_rooms)
+def show_rooms(sock):
+    msg = {
+        'type' : "SCRoomsResult"
+    }
+    msg['rooms'] = []
+    roomId = []
+    room_title = []
+    key_list = []
+    # 현재 존재하는 채팅방의 딕셔너리 key 값 list
+    for room in chat_rooms:
+        key = list(room.keys())
+        key_list.append(key[0])
+
+    index = 0
+    for chat_room in chat_rooms:
+        user_in_room = []
+        roomId = key_list[index]
+        room_title = chat_room[key_list[index]][0][1]
+        for user in users:
+            # 채팅방 내 사용자의 소켓
+            for i in range(len(chat_room[key_list[index]])):
+                user_key = list(user.keys())
+                if chat_room[key_list[index]][i][0] == user_key[0]:
+                    user_in_room.append(user[chat_room[key_list[index]][i][0]])
+
+        msg['rooms'].append({
+            'roomId' : roomId,
+            'title' : room_title,
+            'members' : user_in_room
+        })
+        index+=1
+    send_to_client(sock,msg)
 
 def send_to_client(sock, msg):
     # 메세지 제작부분
@@ -321,7 +362,7 @@ def main():
                     elif message_type == "CSLeaveRoom":
                         leave_chat_room(sock)
                     elif message_type == "CSRooms":
-                        show_rooms()
+                        show_rooms(sock)
 
 
 message_type_handlers = {

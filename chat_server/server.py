@@ -40,7 +40,6 @@ def create_chat_room(sock,title):
         chat_room_group.append(chat_room)
         chat_rooms.append({room_count:chat_room_group})
         print(f"Create Chat Room, roomId is {room_count}")
-        print("chatRooms: ",chat_rooms)
 
         room_count += 1
 
@@ -96,7 +95,6 @@ def send_to_others(sock, json_data):
     for user in users:
         if sock in user:
             send_user_name = user[sock]
-            print("send_user_name : " , send_user_name)
 
     msg = {
         'type' : 'SCChat',
@@ -121,7 +119,6 @@ def send_to_others(sock, json_data):
     for send_user in send_users:
         send_user_sockets.append(send_user[0])
 
-    print("send_user_socket:",send_user_sockets)
     for send_user_socket in send_user_sockets:
         if sock != send_user_socket:
             send_to_client(send_user_socket,msg)
@@ -156,11 +153,8 @@ def leave_chat_room(sock):
             for i in find_room[key_list[index]]:
                 if sock in i:
                     # sock 소켓의 인덱스 할당
-                    print("find_room[key_list[index]]: ",find_room[key_list[index]])
                     for j in range(len(find_room[key_list[index]])):
                         # 지금 이상한게 leave됨
-                        print("비교대상:",find_room[key_list[index]][j])
-                        print("나갈 소켓: ",sock)
                         if sock in find_room[key_list[index]][j]:
                             socket_index = find_room[key_list[index]][j].index(sock)
                             title = find_room[key_list[index]][j][1]
@@ -183,10 +177,7 @@ def leave_chat_room(sock):
                                     'text' : title+'채팅방 폭파!'
                                 }
                                 send_to_client(sock,msg)
-                        
                             return 0
-                        else: 
-                            print("오류")
         index+=1
     msg = {
         'type' : 'SCSystemMessage',
@@ -220,8 +211,6 @@ def is_already_join(sock):
         if key_list[index] in find_room: # 이거도 아마 문제 있을듯
             for i in find_room[key_list[index]]:
                 if sock in i:
-                    print("sock",sock)
-                    print("I",i)
                     print('User already has chatRoom')
                     msg = {
                         'type' : 'SCSystemMessage',
@@ -279,7 +268,7 @@ def send_to_client(sock, msg):
     # 받는 쪽에서 어디까지 읽어야 되는지 message boundary 를 알 수 있게끔 2byte 길이를 추가한다.
     serialized = to_send_big_endian + serialized
 
-    # print(f'[C->S:총길이={len(serialized)}바이트] 0x{to_send:04x}(메시지크기) {"+ " + msg_str if msg_str else ""}')
+    print(f'[C->S:총길이={len(serialized)}바이트] 0x{to_send:04x}(메시지크기) {"+ " + msg_str if msg_str else ""}')
 
     offset = 0
     attempt = 0
@@ -289,7 +278,7 @@ def send_to_client(sock, msg):
             raise RuntimeError('Send failed')
         offset += num_sent
         attempt += 1
-        # print(f'  - send() 시도 #{attempt}: {num_sent}바이트 전송 완료')
+        print(f'  - send() 시도 #{attempt}: {num_sent}바이트 전송 완료')
 # 메세지 제작부분
 
 def main():

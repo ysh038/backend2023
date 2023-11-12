@@ -2,7 +2,10 @@ import socket
 import select
 import json
 import sys
+
 from absl import app, flags
+
+import message_pb2 as pb
 
 # 서버 정보 설정
 HOST = "127.0.0.1"
@@ -329,9 +332,11 @@ def is_already_join(sock,is_create):
     return False
 
 def show_rooms(sock):
+    # if FLAGS.format == 'json':
     msg = {
         'type' : "SCRoomsResult"
     }
+
     msg['rooms'] = []
     roomId = []
     room_title = []
@@ -342,6 +347,7 @@ def show_rooms(sock):
         key_list.append(key[0])
 
     index = 0
+
     for chat_room in chat_rooms:
         user_in_room = []
         roomId = key_list[index]
@@ -352,20 +358,67 @@ def show_rooms(sock):
                 user_key = list(user.keys())
                 if chat_room[key_list[index]][i][0] == user_key[0]:
                     user_in_room.append(user[chat_room[key_list[index]][i][0]])
-
+        
         msg['rooms'].append({
             'roomId' : roomId,
             'title' : room_title,
             'members' : user_in_room
         })
+
         index+=1
+    # else:
+    #     # protobuf
+    #     msg = pb.Type()
+    #     msg.type = pb.Type.MessageType.SCRoomsResult
+    #     messages.append(msg)
+        
+    #     msg = pb.SCRoomsResult()
+    #     msg.rooms = []
+    #     messages.append(msg)
+
+    #     roomId = []
+    #     room_title = []
+    #     key_list = []
+    #     # 현재 존재하는 채팅방의 딕셔너리 key 값 list
+    #     for room in chat_rooms:
+    #         key = list(room.keys())
+    #         key_list.append(key[0])
+
+    #     index = 0
+
+    #     for chat_room in chat_rooms:
+    #         user_in_room = []
+    #         roomId = key_list[index]
+    #         room_title = chat_room[key_list[index]][0][1]
+    #         for user in users:
+    #             # 채팅방 내 사용자의 소켓
+    #             for i in range(len(chat_room[key_list[index]])):
+    #                 user_key = list(user.keys())
+    #                 if chat_room[key_list[index]][i][0] == user_key[0]:
+    #                     user_in_room.append(user[chat_room[key_list[index]][i][0]])
+            
+    #         msgs = pb.SCRoomsResult()
+    #         msg.roomId = roomId
+
+    #         messages[0]['rooms'].append({
+    #             'roomId' : roomId,
+    #             'title' : room_title,
+    #             'members' : user_in_room
+    #         })
+
+    #         index+=1
+
     send_to_client(sock,msg)
 
-def send_to_client(sock, msg):
-    # 메세지 제작부분
+def send_to_client(sock, msg):        
     msg_str = None
+    
+    # 메세지 제작부분
     serialized = bytes(json.dumps(msg), encoding='utf-8')
     msg_str = json.dumps(msg)
+    # else:
+    #     serialized = msg.SerializeToString()
+    #     msg_str = str(msg).strip()
 
     # TCP 에서 send() 함수는 일부만 전송될 수도 있다.
     # 따라서 보내려는 데이터를 다 못 보낸 경우 재시도 해야된다.
@@ -386,7 +439,7 @@ def send_to_client(sock, msg):
         offset += num_sent
         attempt += 1
         print(f'  - send() 시도 #{attempt}: {num_sent}바이트 전송 완료')
-# 메세지 제작부분
+    # 메세지 제작부분
 
 def main():
     # FLAG는 아직 사용하지 않음

@@ -6,7 +6,7 @@ app = Flask(__name__)
 def hello_world():
     return 'Hello, World!' + 1
 
-@app.route('/bad')
+@app.route('/bad',methods=['GET','POST'])
 def bad_world():
     return 'Bad World!'
 

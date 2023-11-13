@@ -25,17 +25,26 @@ def calc_get(num1,operator,num2):
 @app.route('/',methods=['POST'])
 def calc_post():
     response_body = request.get_json()
-    arg1 = int(response_body["arg1"])
-    operator = response_body["op"]
-    arg2 = int(response_body["arg2"])
+    try:
+        arg1 = int(response_body.get("arg1","NO_ARG"))
+        operator = response_body.get("op","NO_OP")
+        arg2 = int(response_body.get("arg2","NO_ARG"))
+    except:
+        resp = make_response(f'bad request!',HTTPStatus.BAD_REQUEST)
+        return resp
 
-    if operator == "+":
+    if arg1 == "NO_ARG" or arg2 == "NO_ARG":
+        resp = make_response(f'bad request!',HTTPStatus.BAD_REQUEST)
+        return resp
+    elif operator == "+":
         result = arg1+arg2
     elif operator == "*":
         result = arg1*arg2
-    else:
+    elif operator == "-":
         result = arg1-arg2
-
+    else:
+        resp = make_response(f'bad request!',HTTPStatus.BAD_REQUEST)
+        return resp
     resp = make_response(f'result is {result}!',HTTPStatus.OK)
     return resp
 

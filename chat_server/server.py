@@ -4,8 +4,7 @@ import json
 import sys
 import threading
 import time
-import concurrent.futures
-
+import queue
 # from multiprocessing.dummy import Pool as ThreadPool
 from absl import app, flags
 
@@ -32,10 +31,13 @@ users = []
 
 # producer가 작업을 집어넣을 큐 또는 consumer가 작업을 빼내올 큐
 queue = []
-# 최대 아이템 개수
+
 MAX_ITEMS = 10
+WORKER_THREAD_NUM = 2
+
 m = threading.Lock()
 cv = threading.Condition(m)
+
 # roomId 배정 정수형 변수
 room_count = 1
 
@@ -301,16 +303,11 @@ def leave_chat_room(sock,json_data,sever_sock):
 
 def shutdown_server(sock, json_data, server_socket):
 # 사용하지 않는 sock, json_data
-
-
     # 모든 클라이언트의 연결을 끊음
     # 여기에 데이터 처리 로직을 추가합니다.
     # 모든 클라이언트 연결을 종료하는 조건
     print("서버와 모든 클라이언트 연결을 종료합니다.")
 
-    # 모든 스레드에게 종료 신호를 보냄
-    with cv:
-        cv.notify_all()
     # 모든 클라이언트 소켓 종료
     for client_sock in client_sockets:
         if client_sock is not server_socket:
@@ -318,12 +315,8 @@ def shutdown_server(sock, json_data, server_socket):
                 client_sock.close()
             
     server_socket.close()
-        
     # 프로그램 종료
     sys.exit()
-
-
-
 
 def show_rooms(sock,json_data, server_socket):
     # 사용하지 않는 json_data, server_socket
@@ -431,7 +424,7 @@ def producer_thread(sock,json_data,server_sock):
         queue.append((sock, json_data, server_sock))
         print(f'[작업 queue에 작업 삽입]')
         
-        cv.notify()
+    cv.notify()
 
 
 def consumer_thread():
@@ -439,14 +432,8 @@ def consumer_thread():
     with cv:
         while not queue:
             print("[Queue가 비었습니다]")
-            cv.wait()
+            return 0
         print("[producer 스레드 condition notify로 인한 consumer 스레드 시작]")
-        n = 3
-        print(f"[{n}초 대기]")
-        for number in range(n):
-            time.sleep(1)
-            print(f"{number}초 경과...")
-        print("[condition notify!]")
         job = queue.pop(0)
         command = job[1]["type"]
         if command in command_handlers:
@@ -456,7 +443,6 @@ def consumer_thread():
         cv.notify()
 
 def main():
-    MAX_THREAD = 2
     # FLAG는 아직 사용하지 않음
     # if not FLAGS.ip:
     #     print('서버의 IP 주소를 지정해야 됩니다.')
@@ -481,8 +467,6 @@ def main():
 
     print(f"서버가 {HOST}:{PORT}에서 실행 중입니다.")
 
-    # 스레드 풀 생성
-    # thread_pool = ThreadPool(5)
     while True:
         if client_sockets[0].fileno() == -1:
             sys.exit()
@@ -507,23 +491,29 @@ def main():
                 else:
                     print(f"[클라이언트로부터 받은 메시지]: {data}")
                     # 클라이언트로부터 받은 데이터를 처리합니다.
-
                     start_index = data.index(b'{')
                     # { 앞은 다 자르고 받음
-                    json_data = json.loads(data[start_index:])
+                    json_data = json.loads(data[start_index:])    
 
-                    producer_thread1 = threading.Thread(target=producer_thread, args=(sock, json_data, server_socket))
-                    consumer_thread1 = threading.Thread(target=consumer_thread)
+                    t1 = threading.Thread(target=producer_thread, args=(sock, json_data, server_socket))
+                    t1.start()
+                    t1.join()
+                    for i in range(WORKER_THREAD_NUM):
+                        t2 = threading.Thread(target=consumer_thread)
+                        t2.start()
+                        t2.join()
+                    # producer_thread1 = threading.Thread(target=producer_thread, args=(sock, json_data, server_socket))
+                    # consumer_thread1 = threading.Thread(target=consumer_thread)
 
-                    print("consumer 스레드1 생성")
-                    consumer_thread1.start()   
-                    print("producer 스레드1 생성")
-                    producer_thread1.start()
+                    # print("consumer 스레드1 생성")
+                    # consumer_thread1.start()   
+                    # print("producer 스레드1 생성")
+                    # producer_thread1.start()
                     
-                    consumer_thread1.join()
-                    print("consumer 스레드1 JOIN")
-                    producer_thread1.join()
-                    print("producer 스레드1 JOIN")
+                    # consumer_thread1.join()
+                    # print("consumer 스레드1 JOIN")
+                    # producer_thread1.join()
+                    # print("producer 스레드1 JOIN")
 
                     # handler 사용
                     # command = json_data["type"]

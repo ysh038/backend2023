@@ -10,14 +10,11 @@ from absl import app, flags
 
 import message_pb2 as pb
 
-# 서버 정보 설정
-HOST = "127.0.0.1"
-PORT = 9123
-# 일단 FLAG 사용 X
-# FLAGS = flags.FLAGS
+FLAGS = flags.FLAGS
 
-# flags.DEFINE_string(name='ip', default='127.0.0.1', help='서버 IP 주소')
-# flags.DEFINE_integer(name='port', default=None, required=True, help='서버 port 번호')
+flags.DEFINE_integer(name='worker', default=2, help='워커 스레드 개수')
+flags.DEFINE_string(name='ip', default='127.0.0.1', help='서버 IP 주소')
+flags.DEFINE_integer(name='port', default=None, required=True, help='서버 port 번호')
 # flags.DEFINE_enum(name='format', default='json', enum_values=['json', 'protobuf'], help='메시지 포맷')
 
 # 클라이언트 소켓을 관리하기 위한 리스트
@@ -32,9 +29,9 @@ users = []
 # producer가 작업을 집어넣을 큐 또는 consumer가 작업을 빼내올 큐
 queue = []
 
-MAX_ITEMS = 10
-WORKER_THREAD_NUM = 2
+is_while = True
 
+# mutex 와 condition variable
 m = threading.Lock()
 cv = threading.Condition(m)
 
@@ -59,7 +56,7 @@ def create_chat_room(sock,json_data,server_sock):
         chat_room.append(title)
         chat_room_group.append(chat_room)
         chat_rooms.append({room_count:chat_room_group})
-        print(f"[채팅방 생성], roomId는 {room_count}")
+        print(f"[채팅방 생성] roomId는 {room_count}")
 
         room_count += 1
 
@@ -302,19 +299,27 @@ def leave_chat_room(sock,json_data,sever_sock):
     return 0
 
 def shutdown_server(sock, json_data, server_socket):
-# 사용하지 않는 sock, json_data
+    global is_while
+    # 사용하지 않는 sock, json_data
     # 모든 클라이언트의 연결을 끊음
     # 여기에 데이터 처리 로직을 추가합니다.
     # 모든 클라이언트 연결을 종료하는 조건
-    print("서버와 모든 클라이언트 연결을 종료합니다.")
 
     # 모든 클라이언트 소켓 종료
     for client_sock in client_sockets:
-        if client_sock is not server_socket:
-                client_sock.send("서버가 종료됩니다.".encode('utf-8'))
+        if client_sock != server_socket:
+                msg = {
+                    'type' : 'SCSystemMessage',
+                    'text' : '서버가 종료됩니다.'
+                }
+                send_to_client(client_sock,msg,sock)
                 client_sock.close()
-            
+    sock.close()
     server_socket.close()
+    is_while = False
+
+    print("서버와 모든 클라이언트 연결을 종료합니다.")
+
     # 프로그램 종료
     sys.exit()
 
@@ -359,7 +364,6 @@ def show_rooms(sock,json_data, server_socket):
 
 def send_to_client(sock, msg, server_socket):   
     # 사용하지 않는 서버 소켓
-
     msg_str = None
     # 메세지 제작부분
     serialized = bytes(json.dumps(msg), encoding='utf-8')
@@ -373,7 +377,7 @@ def send_to_client(sock, msg, server_socket):
     # 받는 쪽에서 어디까지 읽어야 되는지 message boundary 를 알 수 있게끔 2byte 길이를 추가한다.
     serialized = to_send_big_endian + serialized
 
-    print(f'[C->S:총길이={len(serialized)}바이트] 0x{to_send:04x}(메시지크기) {"+ " + msg_str if msg_str else ""}')
+    # print(f'[C->S:총길이={len(serialized)}바이트] 0x{to_send:04x}(메시지크기) {"+ " + msg_str if msg_str else ""}')
 
     offset = 0
     attempt = 0
@@ -414,46 +418,43 @@ def is_already_join(sock,is_create):
         index+=1
     return False
 
-def producer_thread(sock,json_data,server_sock):
-    global queue
-    with cv:
-        while len(queue) == MAX_ITEMS:
-            print("[Queue가 꽉 찼습니다]")
-            cv.wait()
-
-        queue.append((sock, json_data, server_sock))
-        print(f'[작업 queue에 작업 삽입]')
-        
-    cv.notify()
-
-
 def consumer_thread():
-    global queue
-    with cv:
-        while not queue:
-            print("[Queue가 비었습니다]")
-            return 0
-        print("[producer 스레드 condition notify로 인한 consumer 스레드 시작]")
-        job = queue.pop(0)
-        command = job[1]["type"]
-        if command in command_handlers:
-            print('[작업]:', job[0], job[1], job[2])
-            command_handlers[command](job[0], job[1], job[2])
-        print("[consumer 스레드 notify]")
-        cv.notify()
+    # 같은 플래그 써서 종료
+    while is_while:     
+        with cv:
+            print(f"==============={threading.get_native_id()} 쓰레드 대기중====================")
+            cv.wait()
+            print(f"==============={threading.get_native_id()} 쓰레드 작업 시작====================")
 
-def main():
-    # FLAG는 아직 사용하지 않음
-    # if not FLAGS.ip:
-    #     print('서버의 IP 주소를 지정해야 됩니다.')
-    #     # 관례적으로 오류인 경우 0 이 아닌 종료 값을 쓴다.
-    #     # 에러 케이스에 따라 서로 다른 에러코드를 사용할 수도 있다.
-    #     sys.exit(1)
+            global queue
+                # if not queue:
+                #     print("[Queue가 비었습니다]")
+                    # cv.wait()
+                    # return 0
+            print("[producer 스레드 condition notify로 인한 consumer 스레드 시작]")
+            job = queue.pop(0)
+            command = job[1]["type"]
+            if command in command_handlers:
+                command_handlers[command](job[0], job[1], job[2])
 
-    # if not FLAGS.port:
-    #     print('서버의 Port 번호를 지정해야 됩니다.')
-    #     # 에러 케이스에 따라 서로 다른 에러코드를 사용할 수도 있다.
-    #     sys.exit(2)
+def main(argv):
+    if not FLAGS.port:
+        print('서버의 Port 번호를 지정해야 됩니다.')
+        # 에러 케이스에 따라 서로 다른 에러코드를 사용할 수도 있다.
+        sys.exit(1)
+    
+    if FLAGS.ip == '127.0.0.1':
+        print('서버의 default IP 주소는 127.0.0.1 입니다.')
+        # 관례적으로 오류인 경우 0 이 아닌 종료 값을 쓴다.
+        # 에러 케이스에 따라 서로 다른 에러코드를 사용할 수도 있다.
+
+    if FLAGS.worker == 2:
+        print("서버의 default 워커 스레드 개수는 2개 입니다.")
+        print("--worker 옵션으로 워커스레드의 개수 설정 가능합니다. ex) python3 server.py --worker=5")
+    print("\n")
+    # 서버 정보 설정
+    HOST = FLAGS.ip
+    PORT = FLAGS.port
 
     # 서버 소켓 설정
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -465,61 +466,47 @@ def main():
     # 클라이언트 소켓을 기다립니다.
     client_sockets.append(server_socket)
 
-    print(f"서버가 {HOST}:{PORT}에서 실행 중입니다.")
+    print(f"서버가 {HOST}:{PORT}에서 실행 중입니다.\n")
 
-    while True:
-        if client_sockets[0].fileno() == -1:
-            sys.exit()
-        # select.select()를 사용하여 소켓 상태를 확인합니다.
-        readable, _, _ = select.select(client_sockets, [], [])
-        
-        for sock in readable:
-            if sock is server_socket:
-                # 새 클라이언트 연결을 수락합니다.
-                client_socket, client_address = server_socket.accept()
-                client_sockets.append(client_socket)
-                print(f"[새 클라이언트 연결]: {client_address}")
-                users.append({client_socket:client_address})
-            else:
-                # 클라이언트로부터 데이터를 받습니다.
-                data = sock.recv(65535)
-                if not data:
-                    # 클라이언트 연결 종료
-                    print(f"[클라이언트 연결이 끊어졌습니다]: {sock.getpeername()}")
-                    client_sockets.remove(sock)
-                    sock.close()
+    worker_threads = []
+    for i in range(FLAGS.worker):
+        t2 = threading.Thread(target=consumer_thread)
+        t2.daemon = True
+        t2.start()
+        worker_threads.append(t2)
+
+    while is_while:
+        try:
+            # select.select()를 사용하여 소켓 상태를 확인합니다.
+            readable, _, _ = select.select(client_sockets, [], [], 0.1)
+            for sock in readable:
+                if sock is server_socket:
+                    # 새 클라이언트 연결을 수락합니다.
+                    client_socket, client_address = server_socket.accept()
+                    client_sockets.append(client_socket)
+                    print(f"[새 클라이언트 연결]: {client_address}")
+                    users.append({client_socket:client_address})
                 else:
-                    print(f"[클라이언트로부터 받은 메시지]: {data}")
-                    # 클라이언트로부터 받은 데이터를 처리합니다.
-                    start_index = data.index(b'{')
-                    # { 앞은 다 자르고 받음
-                    json_data = json.loads(data[start_index:])    
-
-                    t1 = threading.Thread(target=producer_thread, args=(sock, json_data, server_socket))
-                    t1.start()
-                    t1.join()
-                    for i in range(WORKER_THREAD_NUM):
-                        t2 = threading.Thread(target=consumer_thread)
-                        t2.start()
-                        t2.join()
-                    # producer_thread1 = threading.Thread(target=producer_thread, args=(sock, json_data, server_socket))
-                    # consumer_thread1 = threading.Thread(target=consumer_thread)
-
-                    # print("consumer 스레드1 생성")
-                    # consumer_thread1.start()   
-                    # print("producer 스레드1 생성")
-                    # producer_thread1.start()
-                    
-                    # consumer_thread1.join()
-                    # print("consumer 스레드1 JOIN")
-                    # producer_thread1.join()
-                    # print("producer 스레드1 JOIN")
-
-                    # handler 사용
-                    # command = json_data["type"]
-                    # if command in command_handlers:
-                    #   command_handlers[command](sock,json_data,server_socket)
-
+                    # 클라이언트로부터 데이터를 받습니다.
+                    data = sock.recv(65535)
+                    if not data:
+                        # 클라이언트 연결 종료
+                        print(f"[클라이언트 연결이 끊어졌습니다]: {sock.getpeername()}")
+                        client_sockets.remove(sock)
+                        sock.close()
+                    else:
+                        print(f"[클라이언트로부터 받은 메시지]: {data}")
+                        # 클라이언트로부터 받은 데이터를 처리합니다.
+                        start_index = data.index(b'{')
+                        # { 앞은 다 자르고 받음
+                        json_data = json.loads(data[start_index:])
+                        with cv:
+                            queue.append((sock, json_data, server_socket))
+                            cv.notify()
+        except KeyboardInterrupt:
+            break
+        except:
+            break
 
 command_handlers = {
     'CSCreateRoom': create_chat_room,
@@ -532,4 +519,5 @@ command_handlers = {
 }
 
 if __name__ == "__main__":
-    main()                    
+    app.run(main)                    
+    

@@ -179,7 +179,6 @@ def get_memos():
     cur = conn.cursor()
     cur.execute(f"SELECT * FROM memos WHERE user_id = '{userId}';")
     cur_fetch = cur.fetchall()
-
     for i in cur_fetch:
         memos = {
             'userId' : i[2], # memos 테이블의 세 번째 컬럼 값 -> user_id

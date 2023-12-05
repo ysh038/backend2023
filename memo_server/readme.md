@@ -126,3 +126,16 @@ $ ssh -L8000:localhost:10011 -p 10022 본인아이디@sysdesignlab.mju.ac.kr
 ```
 
 그 뒤에 브라우저에 `http://localhost:8000` 을 입력해서 테스트 해볼 수 있습니다.
+
+# 알게된 것
+
+uwsgi Restart해야 바뀐 파일 적용
+
+>sudo systemctl restart uwsgi-app@memo.service 
+
+nginx log 추적
+
+>tail -f /var/log/nginx/error.log </br>
+tail -f /var/log/nginx/access.log
+
+

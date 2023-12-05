@@ -1,0 +1,6 @@
+server:
+  port: 8081
+
+mju:
+  blog:
+    articles_per_pages: 5

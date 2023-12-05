@@ -3,32 +3,37 @@ import random
 import requests
 import json
 import urllib
-import psycopg2, psycopg2.extras
+import pymysql
 
 from flask import abort, Flask, make_response, render_template, redirect, request
 # from credentials import DATABASE as DB
 
 app = Flask(__name__)
 
-# 본인의 로컬 환경에서는 python3 -m flask --app memo run --port 8080 명령어로 실행
+# 본인의 로컬 환경에서는 python3 -m flask --app memo run --port 8000 명령어로 실행
 
 naver_client_id = 'Py8QuVo4SDJNdVdeVTEZ'
 naver_client_secret = 'zmQgnNNDt9'
-naver_redirect_uri = 'http://localhost:8080/auth'
-naver_redirect_uri_auth = 'http://localhost:8080/'
+naver_redirect_uri = 'http://3.36.54.156:8000/memo/auth'
 '''
   본인 app 의 것으로 교체할 것.
   여기 지정된 url 이 http://localhost:8000/auth 처럼 /auth 인 경우
   아래 onOAuthAuthorizationCodeRedirected() 에 @app.route('/auth') 태깅한 것처럼 해야 함
 '''
 def connect_db():
-    conn = psycopg2.connect(
-        host="postgres-container", # docker 이용해서 DB 접근할때는, DB 이름으로 원래는 127.0.0.1
-        dbname="postgres",
-        user="postgres",
-        password="y3558325",
-        port=5432,
+    conn = pymysql.connect(
+        host='43.203.5.205',
+        user='root',
+        password='pass',
+        db='memo',
+        charset='utf8'
     )
+    # 아래 config들은 postgresql 사용할때
+    # host="127.0.0.1", # docker 이용해서 DB 접근할때는, DB 이름으로 원래는 container-postgres
+    # dbname="postgres",
+    # user="postgres",
+    # password="y3558325",
+    # port=5432,
     conn.autocommit = True
     return conn
 
@@ -126,33 +131,35 @@ def onOAuthAuthorizationCodeRedirected():
     try:
         conn = connect_db()
         cur = conn.cursor()
-        cur.execute("SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE tablename = 'users');")
+        cur.execute("SELECT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'users' AND TABLE_SCHEMA = 'memo');")
         exists = cur.fetchone()[0]
+        print("exists: ",exists==1)
 
-        if exists == True:
+        if exists == 1:
             print("users 테이블이 이미 존재하므로 테이블을 생성하지 않습니다.")
-            cur.execute("INSERT INTO users (id, name) VALUES (%s, %s);", (user_id, user_name))
+            cur.execute("SELECT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'users' AND TABLE_SCHEMA = 'memo');")
+            cur.execute(f"INSERT IGNORE INTO users (id, name) VALUES ('{user_id}', '{user_name}');")
             cur.execute("SELECT * FROM users;")
             print(f"유저 db생성 완료, 현재 users 테이블 목록 \n{cur.fetchall()}\n")
         else:
-            cur.execute("CREATE TABLE users(id text PRIMARY KEY, name text);")
-            cur.execute("INSERT INTO users (id, name) VALUES (%s, %s);", (user_id, user_name))
+            cur.execute("CREATE TABLE users (id VARCHAR(255) PRIMARY KEY, name VARCHAR(255));")
+            cur.execute("CREATE TABLE memos (id INT AUTO_INCREMENT PRIMARY KEY, text VARCHAR(255), user_id VARCHAR(255), FOREIGN KEY (user_id) REFERENCES users(id));")
+            cur.execute("ALTER TABLE users MODIFY name VARCHAR(255) CHARACTER SET utf8 COLLATE utf8_bin;")
+            cur.execute("ALTER TABLE memos MODIFY text VARCHAR(255) CHARACTER SET utf8 COLLATE utf8_bin;")
+            cur.execute("INSERT IGNORE INTO users (id, name) VALUES (%s, %s);", (user_id, user_name))
             cur.execute("SELECT * FROM users;")
             print(f"유저 db생성 완료, 현재 users 테이블 목록 \n{cur.fetchall()}\n")
         conn.commit()
         # 5. 첫 페이지로 redirect 하는데 로그인 쿠키를 설정하고 보내준다.
-        response = redirect('/')
+        response = redirect('/memo')
         response.set_cookie('userId', user_id)
-    except psycopg2.IntegrityError as e:
-        # print(f"에러발생: ",type(e))
-        print("이미 존재하는 회원이므로, 로그인 처리")
-        response = redirect('/')
-        response.set_cookie('userId', user_id)
-    except psycopg2.DatabaseError as e:
-        print("error: ", type(e))
-        print("알 수 없는 데이터베이스 에러")
+    except pymysql.err.InternalError as e:
+        print("error : e")
+        print("데이터베이스 Internal 에러")
+    except pymysql.err.DataError as e:
+        print('error: ',e)
         conn.rollback()
-        response = redirect('/')
+        response = redirect('/memo')
     finally:
         cur.close()
         conn.close()
@@ -164,7 +171,7 @@ def get_memos():
     # 로그인이 안되어 있다면 로그인 하도록 첫 페이지로 redirect 해준다.
     userId = request.cookies.get('userId', default=None)
     if not userId:
-        return redirect('/')
+        return redirect('/memo')
 
     # TODO: DB 에서 해당 userId 의 메모들을 읽어오도록 아래를 수정한다.
     result = []
@@ -189,7 +196,7 @@ def post_new_memo():
     # 로그인이 안되어 있다면 로그인 하도록 첫 페이지로 redirect 해준다.
     userId = request.cookies.get('userId', default=None)
     if not userId:
-        return redirect('/')
+        return redirect('/memo')
 
     # 클라이언트로부터 JSON 을 받았어야 한다.
     if not request.is_json:
@@ -201,6 +208,7 @@ def post_new_memo():
     text = request.json['text']
 
     cur.execute(f"INSERT INTO memos (text, user_id) VALUES('{text}','{userId}');")
+    conn.commit()
     cur.close()
     conn.close()
     #

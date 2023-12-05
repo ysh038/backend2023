@@ -59,3 +59,80 @@ code를 통해 accessToken을 네이버 API에 요청한다.
 
 ### AWS ELB를 통해 실제 배포된 환경
 >http://60172174-lb-1059453829.ap-northeast-2.elb.amazonaws.com/memo
+
+### 그 외 사항
+
+uwsgi Restart해야 바뀐 파일 적용
+
+>sudo systemctl restart uwsgi-app@memo.service 
+>sudo service nginx restart
+
+nginx log 추적
+
+>tail -f /var/log/nginx/error.log </br>
+tail -f /var/log/nginx/access.log
+
+##### postgresql 이미지 설치
+
+ec2 에서 할땐, sudo 붙여야함
+
+>docker pull postgres
+
+>docker docker run 
+-dp 5432:5432 
+--name postgresql 
+-e POSTGRES_PASSWORD=1234 
+-v 호스트 패키지 경로:/var/lib/postgres/data postgres
+
+##### docker shell 접속
+
+>sudo docker exec -it postgres /bin/bash
+
+##### postgresql 접속
+
+>psql -U postgres
+
+##### login 앞에는 /memo prefix 하면 안되는 이유
+
+ ~~index.html에서 login 버튼의 onClick 이벤트를 보니까, window.location 으로 되어있어서 앱 내부에서 redirect 하는 식으로 해서 앞에 prefix 빼도 되는듯~~
+
+~~prefix를 하는건 브라우저에서 직접 request할때만? 아마도?~~
+
+##### mysql docker 컨테이너 접속하기
+
+>$sudo docker exec -it mysql-container bash
+
+>$mysql -uroot -p
+
+##### mysql 컬럼 utf8 오류 뜰때
+>"ALTER TABLE mytable MODIFY name VARCHAR(255) CHARACTER SET utf8 COLLATE utf8_bin;"
+
+##### mysql flask에서 execute해도 적용 안될 때
+cur.commit 같은것을 해야함!!
+
+##### wsgi 서버에 띄워진 앱 로깅하기
+``` python
+from logging.config import dictConfig
+from logging.handlers import RotatingFileHandler
+
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    }},
+    'handlers': {
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': '/path/to/your/log/file.log',
+            'formatter': 'default',
+            'maxBytes': 1024 * 1024,
+            'backupCount': 10
+        }
+    },
+    'root': {
+        'level': 'INFO',
+        'handlers': ['file']
+    }
+})
+```
+> 출처: https://flask.palletsprojects.com/en/2.3.x/logging/

@@ -4,3 +4,22 @@ server:
 mju:
   blog:
     articles_per_pages: 5
+
+logging:
+  level:
+    root: INFO
+    org.example.BlogController: DEBUG
+  file:
+    name: /mylogdir/mylog.txt
+    max-size: 1KB
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/mydb
+    username: root
+    password: password
+  jpa:
+    show-sql: true
+  h2:
+    console:
+      enabled: true

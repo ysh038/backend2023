@@ -2,23 +2,41 @@ package org.example;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import net.minidev.json.JSONUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.stream.Collectors;
 
 @RestController
 public class BlogController {
+    Logger logger = LoggerFactory.getLogger(BlogController.class);
+
+    @Autowired
+    ArticleManager articleManager;
+
     @Value("${mju.blog.articles_per_pages}")
     int articlesPerPages;
 
     @GetMapping("/hello")
     public String hello(){
+        logger.debug("hello");
+        logger.info("hello");
+        logger.warn("hello");
+        logger.error("hello");
         return "world!" + articlesPerPages;
     }
 
@@ -28,22 +46,36 @@ public class BlogController {
     }
 
     @GetMapping("/article/titles") public Object getArticleTitles() {
-        ArrayList<String> a = new ArrayList<>();
-        a.add("제목1");
-        a.add("제목2");
-        return a;
+        return articleManager.getTitles();
     }
 
     @GetMapping("/article/{number}")
     public Object getArticle(@PathVariable int number) {
-        GetArticleResponse a = new GetArticleResponse();
-        a.title = "즐거운 하루";
-        a.num = number;
-        return a;
+        GetArticleResponse r = new GetArticleResponse();
+        r.num = number;
+        r.title = articleManager.getTitleAt(number);
+        return r;
     }
 
     @PostMapping("/article")
-    public void postArticle(HttpServletRequest request, HttpServletResponse response) throws IOException{
-        System.out.println(request.getMethod());
+    public void postArticle(@RequestBody PostArticleRequest body){
+        articleManager.append(body.title);
+    }
+
+    @GetMapping("/error1/{code}")
+    public void getStatusCode1(@PathVariable int code, HttpServletResponse response){
+        response.setStatus(code);
+    }
+
+    @GetMapping("/error2/{code}")
+    public ResponseEntity<?> getStatusCode2(@PathVariable int code){
+        HttpStatusCode code2 = HttpStatusCode.valueOf(code);
+        return new ResponseEntity<>(code2);
+    }
+
+    @GetMapping("/error3/{code}")
+    public void getStatusCode3(@PathVariable int code){
+        HttpStatusCode code2 = HttpStatusCode.valueOf(code);
+        throw new ResponseStatusException(code2);
     }
 }

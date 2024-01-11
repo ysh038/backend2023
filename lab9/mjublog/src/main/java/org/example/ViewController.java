@@ -12,3 +12,4 @@ public class ViewController {
         return "index";
     }
 }
+

@@ -8,8 +8,6 @@ import queue
 # from multiprocessing.dummy import Pool as ThreadPool
 from absl import app, flags
 
-import message_pb2 as pb
-
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer(name="worker", default=2, help="워커 스레드 개수")
